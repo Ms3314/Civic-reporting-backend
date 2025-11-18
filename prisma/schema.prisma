@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// this is for the dashboard 
+model Admin {
+  id        String   @id @default(uuid())
+  email     String
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// so this is the mobile citizen 
+model User {
+  id        String   @id @default(uuid())
+  number    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  issues    Issue[]
+}
+
+// this will be the issue that is being reported by the citizen 
+model Issue {
+  id               String   @id @default(uuid())
+  title            String
+  description     String
+  image           String?   // Optional image URL
+  importanceRating Int      @default(0) // 0-5 scale set by citizen
+  status          Int       @default(0) // 0-5 scale set by admin (0=pending, 5=resolved)
+  categoryId      String
+  category        Category  @relation(fields: [categoryId], references: [id])
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  issues      Issue[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PhoneOtp {
+  id        String   @id @default(uuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, consumed])
+}
