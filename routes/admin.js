@@ -1,9 +1,14 @@
 import express from "express";
 import { AdminController } from "../controller/adminController.js";
 import { CommentController } from "../controller/commentController.js";
+import { CategoryController } from "../controller/categoryController.js";
 import { authenticate, requireAdmin } from "../middleware/auth.js";
 
 const adminRouter = express.Router();
+
+// Category routes (public - no auth required)
+adminRouter.get("/categories", CategoryController.getCategories);
+adminRouter.get("/categories/:id", CategoryController.getCategoryById);
 
 // Authentication routes (public - no auth required)
 adminRouter.post("/login", AdminController.login);

@@ -3,6 +3,7 @@ import { UserController } from "../controller/userController.js";
 import { IssueController } from "../controller/issueController.js";
 import { CommentController } from "../controller/commentController.js";
 import { RepostController } from "../controller/repostController.js";
+import { CategoryController } from "../controller/categoryController.js";
 import { authenticate, requireUser } from "../middleware/auth.js";
 
 const userRouter = express.Router();
@@ -10,6 +11,10 @@ const userRouter = express.Router();
 // Authentication routes
 userRouter.post("/request-otp", UserController.requestLoginOtp);
 userRouter.post("/verify-otp", UserController.verifyLoginOtp);
+
+// Category routes (public - no auth required)
+userRouter.get("/categories", CategoryController.getCategories);
+userRouter.get("/categories/:id", CategoryController.getCategoryById);
 
 // Issue routes (protected - require user authentication)
 userRouter.post("/issues", authenticate, requireUser, IssueController.createIssue);

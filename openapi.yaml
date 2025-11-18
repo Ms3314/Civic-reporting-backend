@@ -1,0 +1,1174 @@
+openapi: 3.0.0
+info:
+  title: Hack Backend API
+  description: |
+    API for civic issue reporting and management system.
+    - Users can report issues, view their issues, and repost issues
+    - Admins can manage issues, update status, and add comments
+    - Authentication via JWT tokens (Bearer token)
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+  - url: https://api.example.com/api/v1
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User and Admin authentication endpoints
+  - name: Categories
+    description: Category management endpoints
+  - name: User Issues
+    description: User issue management endpoints
+  - name: Admin Issues
+    description: Admin issue management endpoints
+  - name: Comments
+    description: Comment management endpoints
+  - name: Reposts
+    description: Issue repost management endpoints
+
+paths:
+  # Category Endpoints (Public)
+  /user/categories:
+    get:
+      tags:
+        - Categories
+      summary: Get all categories
+      description: Retrieve all available categories (public endpoint, no authentication required)
+      operationId: getCategories
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  categories:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+                  count:
+                    type: integer
+        '500':
+          description: Server error
+
+  /user/categories/{id}:
+    get:
+      tags:
+        - Categories
+      summary: Get category by ID
+      description: Retrieve a specific category by ID (public endpoint, no authentication required)
+      operationId: getCategoryById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Category ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Category retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  category:
+                    allOf:
+                      - $ref: '#/components/schemas/Category'
+                      - type: object
+                        properties:
+                          issueCount:
+                            type: integer
+        '404':
+          description: Category not found
+        '500':
+          description: Server error
+
+  /admin/categories:
+    get:
+      tags:
+        - Categories
+      summary: Get all categories (Admin)
+      description: Retrieve all available categories (public endpoint, no authentication required)
+      operationId: getAdminCategories
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  categories:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
+                  count:
+                    type: integer
+        '500':
+          description: Server error
+
+  /admin/categories/{id}:
+    get:
+      tags:
+        - Categories
+      summary: Get category by ID (Admin)
+      description: Retrieve a specific category by ID (public endpoint, no authentication required)
+      operationId: getAdminCategoryById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Category ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Category retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  category:
+                    allOf:
+                      - $ref: '#/components/schemas/Category'
+                      - type: object
+                        properties:
+                          issueCount:
+                            type: integer
+        '404':
+          description: Category not found
+        '500':
+          description: Server error
+
+  # User Authentication
+  /user/request-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Request OTP for user login
+      description: Sends an OTP to the provided phone number via SMS
+      operationId: requestUserOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+              properties:
+                phone:
+                  type: string
+                  description: Phone number in E.164 format (e.g., +1234567890)
+                  example: "+1234567890"
+      responses:
+        '200':
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "OTP sent successfully. Please check your phone."
+                  sid:
+                    type: string
+                    description: Twilio verification SID
+        '400':
+          description: Invalid phone number format
+        '500':
+          description: SMS service not configured or server error
+
+  /user/verify-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Verify OTP and login user
+      description: Verifies the OTP code and returns a JWT token
+      operationId: verifyUserOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+                - otp
+              properties:
+                phone:
+                  type: string
+                  example: "+1234567890"
+                otp:
+                  type: string
+                  description: OTP code received via SMS
+                  example: "123456"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Login successful. OTP verified."
+                  token:
+                    type: string
+                    description: JWT token for authentication
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Missing phone or OTP
+        '401':
+          description: Invalid or expired OTP
+        '500':
+          description: Server error
+
+  # Admin Authentication
+  /admin/login:
+    post:
+      tags:
+        - Authentication
+      summary: Admin login
+      description: Authenticate admin with email and password
+      operationId: adminLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "admin@example.com"
+                password:
+                  type: string
+                  format: password
+                  example: "password123"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Admin logged in successfully"
+                  token:
+                    type: string
+                    description: JWT token for authentication
+                  admin:
+                    $ref: '#/components/schemas/Admin'
+        '401':
+          description: Invalid credentials
+        '500':
+          description: Server error
+
+  # User Issue Endpoints
+  /user/issues:
+    post:
+      tags:
+        - User Issues
+      summary: Create a new issue
+      description: Create a new civic issue (requires user authentication)
+      operationId: createIssue
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - description
+                - categoryId
+              properties:
+                title:
+                  type: string
+                  example: "Pothole on Main Street"
+                description:
+                  type: string
+                  example: "Large pothole near the intersection causing traffic issues"
+                image:
+                  type: string
+                  format: uri
+                  nullable: true
+                  example: "https://example.com/image.jpg"
+                categoryId:
+                  type: string
+                  format: uuid
+                  example: "123e4567-e89b-12d3-a456-426614174000"
+                importanceRating:
+                  type: integer
+                  minimum: 0
+                  maximum: 5
+                  default: 0
+                  example: 4
+      responses:
+        '201':
+          description: Issue created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  issue:
+                    $ref: '#/components/schemas/Issue'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '404':
+          description: User or category not found
+        '500':
+          description: Server error
+
+    get:
+      tags:
+        - User Issues
+      summary: Get user's issues
+      description: Retrieve all issues created by the authenticated user
+      operationId: getUserIssues
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by status (0-5)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 5
+        - name: categoryId
+          in: query
+          description: Filter by category ID
+          schema:
+            type: string
+            format: uuid
+        - name: sortBy
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum: [createdAt, updatedAt, priority]
+            default: createdAt
+        - name: order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Issues retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  issues:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Issue'
+                  count:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+
+  /user/issues/{id}:
+    get:
+      tags:
+        - User Issues
+      summary: Get issue by ID
+      description: Retrieve a specific issue by ID
+      operationId: getIssueById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Issue ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Issue retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  issue:
+                    $ref: '#/components/schemas/Issue'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Issue not found
+        '500':
+          description: Server error
+
+  # Admin Issue Endpoints
+  /admin/issues:
+    get:
+      tags:
+        - Admin Issues
+      summary: Get all issues (Admin)
+      description: Retrieve all issues with filtering and sorting options
+      operationId: getAdminIssues
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by status (0-5)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 5
+        - name: categoryId
+          in: query
+          description: Filter by category ID
+          schema:
+            type: string
+            format: uuid
+        - name: sortBy
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum: [createdAt, updatedAt, priority]
+            default: createdAt
+        - name: order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Issues retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  issues:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Issue'
+                  count:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin access required
+        '500':
+          description: Server error
+
+  /admin/issues/{id}:
+    get:
+      tags:
+        - Admin Issues
+      summary: Get issue by ID (Admin)
+      description: Retrieve a specific issue by ID with full details
+      operationId: getAdminIssueById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Issue ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Issue retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  issue:
+                    $ref: '#/components/schemas/Issue'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin access required
+        '404':
+          description: Issue not found
+        '500':
+          description: Server error
+
+  /admin/issues/{id}/status:
+    put:
+      tags:
+        - Admin Issues
+      summary: Update issue status
+      description: Update the status of an issue (0=pending, 5=resolved)
+      operationId: updateIssueStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Issue ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: integer
+                  minimum: 0
+                  maximum: 5
+                  description: Status value (0=pending, 5=resolved)
+                  example: 3
+      responses:
+        '200':
+          description: Issue status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  issue:
+                    $ref: '#/components/schemas/Issue'
+        '400':
+          description: Invalid status value
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin access required
+        '404':
+          description: Issue not found
+        '500':
+          description: Server error
+
+  # Comment Endpoints
+  /user/issues/{issueId}/comments:
+    get:
+      tags:
+        - Comments
+      summary: Get comments for an issue (User)
+      description: Retrieve all comments for a specific issue
+      operationId: getUserComments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          description: Issue ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Comments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  comments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+                  count:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Can only view comments on own issues
+        '404':
+          description: Issue not found
+        '500':
+          description: Server error
+
+  /admin/issues/{issueId}/comments:
+    post:
+      tags:
+        - Comments
+      summary: Create a comment on an issue (Admin)
+      description: Add a comment to an issue
+      operationId: createComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          description: Issue ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  example: "We are investigating this issue and will update you soon."
+      responses:
+        '201':
+          description: Comment created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  comment:
+                    $ref: '#/components/schemas/Comment'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin access required
+        '404':
+          description: Issue or admin not found
+        '500':
+          description: Server error
+
+    get:
+      tags:
+        - Comments
+      summary: Get comments for an issue (Admin)
+      description: Retrieve all comments for a specific issue
+      operationId: getAdminComments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          description: Issue ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Comments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  comments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comment'
+                  count:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Admin access required
+        '404':
+          description: Issue not found
+        '500':
+          description: Server error
+
+  /admin/comments/{commentId}:
+    put:
+      tags:
+        - Comments
+      summary: Update a comment (Admin)
+      description: Update a comment (can only update own comments)
+      operationId: updateComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          description: Comment ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  example: "Updated comment content"
+      responses:
+        '200':
+          description: Comment updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  comment:
+                    $ref: '#/components/schemas/Comment'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Can only update own comments
+        '404':
+          description: Comment not found
+        '500':
+          description: Server error
+
+    delete:
+      tags:
+        - Comments
+      summary: Delete a comment (Admin)
+      description: Delete a comment (can only delete own comments)
+      operationId: deleteComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          description: Comment ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Comment deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Can only delete own comments
+        '404':
+          description: Comment not found
+        '500':
+          description: Server error
+
+  # Repost Endpoints
+  /user/issues/{issueId}/repost:
+    post:
+      tags:
+        - Reposts
+      summary: Repost an issue
+      description: Repost/share an issue (cannot repost own issues)
+      operationId: repostIssue
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          description: Issue ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Issue reposted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  repost:
+                    $ref: '#/components/schemas/Repost'
+                  repostCount:
+                    type: integer
+        '400':
+          description: Already reposted or cannot repost own issue
+        '401':
+          description: Unauthorized
+        '404':
+          description: Issue not found
+        '500':
+          description: Server error
+
+    delete:
+      tags:
+        - Reposts
+      summary: Remove repost
+      description: Remove a repost from an issue
+      operationId: unrepostIssue
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          description: Issue ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Repost removed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  repostCount:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '404':
+          description: Repost not found
+        '500':
+          description: Server error
+
+    get:
+      tags:
+        - Reposts
+      summary: Check if user reposted an issue
+      description: Check if the authenticated user has reposted a specific issue
+      operationId: checkRepost
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          description: Issue ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Repost status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasReposted:
+                    type: boolean
+                  repost:
+                    $ref: '#/components/schemas/Repost'
+                    nullable: true
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from login endpoints
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          example: "+1234567890"
+        role:
+          type: string
+          example: "user"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Admin:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          example: "admin"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Infrastructure"
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Issue:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        image:
+          type: string
+          format: uri
+          nullable: true
+        importanceRating:
+          type: integer
+          minimum: 0
+          maximum: 5
+          description: User's importance rating (0-5)
+        status:
+          type: integer
+          minimum: 0
+          maximum: 5
+          description: Admin status (0=pending, 5=resolved)
+        categoryId:
+          type: string
+          format: uuid
+        category:
+          $ref: '#/components/schemas/Category'
+        userId:
+          type: string
+          format: uuid
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            number:
+              type: string
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+        reposts:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              userId:
+                type: string
+                format: uuid
+        repostCount:
+          type: integer
+          description: Number of reposts
+        priority:
+          type: object
+          properties:
+            totalPriority:
+              type: number
+              description: Total priority score (0-10)
+            normalizedPriority:
+              type: number
+              description: Normalized priority (0-5 scale)
+            userRatingPoints:
+              type: number
+            repostPoints:
+              type: number
+            repostCount:
+              type: integer
+            importanceRating:
+              type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        issueId:
+          type: string
+          format: uuid
+        issue:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            title:
+              type: string
+        adminId:
+          type: string
+          format: uuid
+        admin:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+              format: email
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Repost:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        issueId:
+          type: string
+          format: uuid
+        issue:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            title:
+              type: string
+        userId:
+          type: string
+          format: uuid
+        user:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            number:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        error:
+          type: string
+          nullable: true
+
