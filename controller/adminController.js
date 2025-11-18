@@ -32,7 +32,7 @@ export class AdminController {
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN ?? "12h" }
       );
-
+      
       return res.status(200).json({
         success: true,
         message: "Admin logged in successfully",
@@ -59,13 +59,32 @@ export class AdminController {
         return res.status(400).json({ message: "Status is required" });
       }
 
-      const statusValue = parseInt(status);
-      if (statusValue < 0 || statusValue > 5) {
-        return res.status(400).json({
-          message: "Status must be between 0 and 5 (0=pending, 5=resolved)",
-        });
-      }
+      // Accept either numeric status (0-5) or string enum value (PENDING, PROGRESS, COMPLETED)
+      const mapNumericToEnum = (n) => {
+        if (n === 0) return "PENDING";
+        if (n === 5) return "COMPLETED";
+        return "PROGRESS"; // any intermediate value considered in-progress
+      };
 
+      let finalStatus;
+      if (typeof status === "number" || !Number.isNaN(parseInt(status))) {
+        const statusValue = parseInt(status);
+        if (statusValue < 0 || statusValue > 5) {
+          return res.status(400).json({
+            message: "Status must be between 0 and 5 (0=pending, 5=resolved)",
+          });
+        }
+        finalStatus = mapNumericToEnum(statusValue);
+      } else if (typeof status === "string") {
+        const up = status.toUpperCase();
+        if (!["PENDING", "PROGRESS", "COMPLETED"].includes(up)) {
+          return res.status(400).json({ message: "Invalid status value" });
+        }
+        finalStatus = up;
+      } else {
+        return res.status(400).json({ message: "Invalid status payload" });
+      }
+      
       const issue = await prisma.issue.findUnique({
         where: { id },
       });
@@ -76,7 +95,7 @@ export class AdminController {
 
       const updatedIssue = await prisma.issue.update({
         where: { id },
-        data: { status: statusValue },
+        data: { status: finalStatus },
         include: {
           category: true,
           user: {
@@ -133,7 +152,16 @@ export class AdminController {
 
       const where = {};
       if (status !== undefined) {
-        where.status = parseInt(status);
+        // allow numeric (0-5) or enum string
+        if (!Number.isNaN(parseInt(status))) {
+          const s = parseInt(status);
+          if (s < 0 || s > 5) {
+            return res.status(400).json({ message: "Status must be between 0 and 5" });
+          }
+          where.status = s === 0 ? "PENDING" : s === 5 ? "COMPLETED" : "PROGRESS";
+        } else {
+          where.status = status.toUpperCase();
+        }
       }
       if (categoryId) {
         where.categoryId = categoryId;

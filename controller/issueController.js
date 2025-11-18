@@ -46,7 +46,7 @@ export class IssueController {
           description,
           image: image || null,
           importanceRating: rating,
-          status: 0, // Default status is 0 (pending)
+          status: "PENDING", // Default status is 0 (pending)
           categoryId,
           userId,
         },
@@ -109,7 +109,16 @@ export class IssueController {
         userId, // Users can only see their own issues
       };
       if (status !== undefined) {
-        where.status = parseInt(status);
+        // allow numeric (0-5) or enum string
+        if (!Number.isNaN(parseInt(status))) {
+          const s = parseInt(status);
+          if (s < 0 || s > 5) {
+            return res.status(400).json({ message: "Status must be between 0 and 5" });
+          }
+          where.status = s === 0 ? "PENDING" : s === 5 ? "COMPLETED" : "PROGRESS";
+        } else {
+          where.status = status.toUpperCase();
+        }
       }
       if (categoryId) {
         where.categoryId = categoryId;

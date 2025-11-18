@@ -5,8 +5,13 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
+}
+
+enum IssueStatus {
+  PROGRESS
+  PENDING
+  COMPLETED
 }
 
 datasource db {
@@ -41,7 +46,7 @@ model Issue {
   description     String
   image           String?   // Optional image URL
   importanceRating Int      @default(0) // 0-5 scale set by citizen (for priority calculation)
-  status          Int       @default(0) // 0-5 scale set by admin (0=pending, 5=resolved)
+  status           IssueStatus  @default(PENDING) // enum status: PENDING, PROGRESS, COMPLETED
   categoryId      String
   category        Category  @relation(fields: [categoryId], references: [id])
   userId          String

@@ -4,8 +4,11 @@ import cookieParser from "cookie-parser";
 import userRouter from "./routes/user.js";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger.js";
+import cors from "cors";
 
 const app = express();
+app.use(cors());
+
 
 // Swagger UI setup
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
