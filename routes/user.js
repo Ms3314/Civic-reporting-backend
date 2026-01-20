@@ -19,10 +19,14 @@ userRouter.get("/categories/:id", CategoryController.getCategoryById);
 // Issue routes (protected - require user authentication)
 userRouter.post("/issues", authenticate, requireUser, IssueController.createIssue);
 userRouter.get("/issues", authenticate, requireUser, IssueController.getIssues);
+userRouter.get("/issues/my-issues", authenticate, requireUser, IssueController.getMyIssues);
 userRouter.get("/issues/:id", authenticate, requireUser, IssueController.getIssueById);
 
-// Comment routes (users can view comments on their issues)
+// Comment routes (users can view, create, update, and delete their own comments)
+userRouter.post("/issues/:issueId/comments", authenticate, requireUser, CommentController.createUserComment);
 userRouter.get("/issues/:issueId/comments", authenticate, requireUser, CommentController.getCommentsByIssue);
+userRouter.put("/comments/:commentId", authenticate, requireUser, CommentController.updateUserComment);
+userRouter.delete("/comments/:commentId", authenticate, requireUser, CommentController.deleteUserComment);
 
 // Repost routes (protected - require user authentication)
 userRouter.post("/issues/:issueId/repost", authenticate, requireUser, RepostController.repostIssue);

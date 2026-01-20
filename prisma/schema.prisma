@@ -8,12 +8,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum IssueStatus {
-  PROGRESS
-  PENDING
-  COMPLETED
-}
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -37,6 +31,7 @@ model User {
   updatedAt DateTime @updatedAt
   issues    Issue[]
   reposts   Repost[]
+  comments  Comment[]
 }
 
 // this will be the issue that is being reported by the citizen 
@@ -46,7 +41,7 @@ model Issue {
   description     String
   image           String?   // Optional image URL
   importanceRating Int      @default(0) // 0-5 scale set by citizen (for priority calculation)
-  status           IssueStatus  @default(PENDING) // enum status: PENDING, PROGRESS, COMPLETED
+  status          Int       @default(0) // 0-5 scale set by admin (0=pending, 5=resolved)
   categoryId      String
   category        Category  @relation(fields: [categoryId], references: [id])
   userId          String
@@ -77,14 +72,16 @@ model PhoneOtp {
   @@index([phone, consumed])
 }
 
-// Comments made by admins on issues
+// Comments made by admins and users on issues
 model Comment {
   id        String   @id @default(uuid())
   content   String
   issueId   String
   issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  adminId   String
-  admin     Admin    @relation(fields: [adminId], references: [id])
+  adminId   String?  // Optional - for admin comments
+  admin     Admin?   @relation(fields: [adminId], references: [id])
+  userId    String?  // Optional - for user comments
+  user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -1,7 +1,7 @@
 import prisma from "../lib/prisma.js";
 
 export class CommentController {
-  // Create a comment on an issue (admin only)
+  // Create a comment on an issue (admin only - for admin endpoints)
   static createComment = async (req, res) => {
     try {
       const { issueId } = req.params;
@@ -45,10 +45,10 @@ export class CommentController {
               email: true,
             },
           },
-          issue: {
+          user: {
             select: {
               id: true,
-              title: true,
+              number: true,
             },
           },
         },
@@ -60,6 +60,69 @@ export class CommentController {
       });
     } catch (error) {
       console.error("[Comment] createComment failed:", error);
+      return res.status(500).json({ message: "Failed to create comment" });
+    }
+  };
+
+  // Create a comment on an issue (user - can comment on any issue)
+  static createUserComment = async (req, res) => {
+    try {
+      const { issueId } = req.params;
+      const { content } = req.body;
+      const userId = req.user.sub; // Get user ID from authenticated token
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({
+          message: "Comment content is required",
+        });
+      }
+
+      // Verify issue exists
+      const issue = await prisma.issue.findUnique({
+        where: { id: issueId },
+      });
+
+      if (!issue) {
+        return res.status(404).json({ message: "Issue not found" });
+      }
+
+      // Verify user exists
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const comment = await prisma.comment.create({
+        data: {
+          content: content.trim(),
+          issueId,
+          userId,
+        },
+        include: {
+          admin: {
+            select: {
+              id: true,
+              email: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              number: true,
+            },
+          },
+        },
+      });
+
+      return res.status(201).json({
+        message: "Comment created successfully",
+        comment,
+      });
+    } catch (error) {
+      console.error("[Comment] createUserComment failed:", error);
       return res.status(500).json({ message: "Failed to create comment" });
     }
   };
@@ -80,12 +143,7 @@ export class CommentController {
         return res.status(404).json({ message: "Issue not found" });
       }
 
-      // If it's a user request, verify they own the issue
-      if (req.user.role === "user" && issue.userId !== userId) {
-        return res.status(403).json({
-          message: "You can only view comments on your own issues",
-        });
-      }
+      // Users can now view comments on any issue (no restriction)
 
       const comments = await prisma.comment.findMany({
         where: {
@@ -96,6 +154,12 @@ export class CommentController {
             select: {
               id: true,
               email: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              number: true,
             },
           },
         },
@@ -155,10 +219,10 @@ export class CommentController {
               email: true,
             },
           },
-          issue: {
+          user: {
             select: {
               id: true,
-              title: true,
+              number: true,
             },
           },
         },
@@ -170,6 +234,65 @@ export class CommentController {
       });
     } catch (error) {
       console.error("[Comment] updateComment failed:", error);
+      return res.status(500).json({ message: "Failed to update comment" });
+    }
+  };
+
+  // Update a comment (user - can only update their own comments)
+  static updateUserComment = async (req, res) => {
+    try {
+      const { commentId } = req.params;
+      const { content } = req.body;
+      const userId = req.user.sub; // Get user ID from authenticated token
+
+      if (!content || content.trim().length === 0) {
+        return res.status(400).json({
+          message: "Comment content is required",
+        });
+      }
+
+      // Find comment and verify it belongs to the user
+      const comment = await prisma.comment.findUnique({
+        where: { id: commentId },
+      });
+
+      if (!comment) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
+      if (comment.userId !== userId) {
+        return res.status(403).json({
+          message: "You can only update your own comments",
+        });
+      }
+
+      const updatedComment = await prisma.comment.update({
+        where: { id: commentId },
+        data: {
+          content: content.trim(),
+        },
+        include: {
+          admin: {
+            select: {
+              id: true,
+              email: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              number: true,
+            },
+          },
+        },
+      });
+
+      return res.status(200).json({
+        message: "Comment updated successfully",
+        comment: updatedComment,
+      });
+    } catch (error) {
+      console.error("[Comment] updateUserComment failed:", error);
       return res.status(500).json({ message: "Failed to update comment" });
     }
   };
@@ -204,6 +327,40 @@ export class CommentController {
       });
     } catch (error) {
       console.error("[Comment] deleteComment failed:", error);
+      return res.status(500).json({ message: "Failed to delete comment" });
+    }
+  };
+
+  // Delete a comment (user - can only delete their own comments)
+  static deleteUserComment = async (req, res) => {
+    try {
+      const { commentId } = req.params;
+      const userId = req.user.sub; // Get user ID from authenticated token
+
+      // Find comment and verify it belongs to the user
+      const comment = await prisma.comment.findUnique({
+        where: { id: commentId },
+      });
+
+      if (!comment) {
+        return res.status(404).json({ message: "Comment not found" });
+      }
+
+      if (comment.userId !== userId) {
+        return res.status(403).json({
+          message: "You can only delete your own comments",
+        });
+      }
+
+      await prisma.comment.delete({
+        where: { id: commentId },
+      });
+
+      return res.status(200).json({
+        message: "Comment deleted successfully",
+      });
+    } catch (error) {
+      console.error("[Comment] deleteUserComment failed:", error);
       return res.status(500).json({ message: "Failed to delete comment" });
     }
   };

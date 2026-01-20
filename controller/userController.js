@@ -14,13 +14,26 @@ const TWILIO_VERIFY_SERVICE_SID = process.env.TWILIO_VERIFY_SERVICE_SID;
 export class UserController {
   static requestLoginOtp = async (req, res) => {
     try {
+      console.log("we are runnning user controller request login otp")
       const { phone } = req.body;
 
       if (!phone) {
         return res.status(400).json({ message: "Phone number is required." });
       }
 
+      // Validate phone number format (E.164 format: +[country code][number])
+      // Example: +1234567890, +919876543210
+      const phoneRegex = /^\+[1-9]\d{1,14}$/;
+      if (!phoneRegex.test(phone)) {
+        return res.status(400).json({
+          message: "Invalid phone number format. Please use E.164 format: +[country code][number] (e.g., +1234567890, +919876543210)",
+          example: "+1234567890",
+        });
+      }
+
       if (!twilioClient || !TWILIO_VERIFY_SERVICE_SID) {
+        console.log("twilioClient is this" , twilioClient);
+        console.log("TWILIO_VERIFY_SERVICE_SID is this" , TWILIO_VERIFY_SERVICE_SID);
         console.error("[Auth] Twilio credentials missing");
         return res.status(500).json({ message: "SMS service not configured." });
       }
@@ -40,7 +53,11 @@ export class UserController {
     } catch (error) {
       console.error("[Auth] requestLoginOtp failed:", error);
       if (error.code === 60200) {
-        return res.status(400).json({ message: "Invalid phone number format." });
+        return res.status(400).json({
+          message: "Invalid phone number format. Please use E.164 format: +[country code][number]",
+          example: "+1234567890",
+          format: "Must start with + followed by country code and number (e.g., +1 for US, +91 for India)",
+        });
       }
       return res.status(500).json({ message: "Unable to send OTP right now." });
     }

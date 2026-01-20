@@ -46,7 +46,7 @@ export class IssueController {
           description,
           image: image || null,
           importanceRating: rating,
-          status: "PENDING", // Default status is 0 (pending)
+          status: 0, // Default status is 0 (pending)
           categoryId,
           userId,
         },
@@ -99,26 +99,14 @@ export class IssueController {
     }
   };
 
-  // Get all issues with optional filters (users can only see their own issues)
+  // Get all issues with optional filters (users can see all issues)
   static getIssues = async (req, res) => {
     try {
       const { status, categoryId, sortBy = "createdAt", order = "desc" } = req.query;
-      const userId = req.user.sub; // Get user ID from authenticated token
 
-      const where = {
-        userId, // Users can only see their own issues
-      };
+      const where = {};
       if (status !== undefined) {
-        // allow numeric (0-5) or enum string
-        if (!Number.isNaN(parseInt(status))) {
-          const s = parseInt(status);
-          if (s < 0 || s > 5) {
-            return res.status(400).json({ message: "Status must be between 0 and 5" });
-          }
-          where.status = s === 0 ? "PENDING" : s === 5 ? "COMPLETED" : "PROGRESS";
-        } else {
-          where.status = status.toUpperCase();
-        }
+        where.status = parseInt(status);
       }
       if (categoryId) {
         where.categoryId = categoryId;
@@ -194,6 +182,98 @@ export class IssueController {
     }
   };
 
+  // Get only the authenticated user's issues
+  static getMyIssues = async (req, res) => {
+    try {
+      const { status, categoryId, sortBy = "createdAt", order = "desc" } = req.query;
+      const userId = req.user.sub; // Get user ID from authenticated token
+
+      const where = {
+        userId, // Only get issues created by this user
+      };
+      if (status !== undefined) {
+        where.status = parseInt(status);
+      }
+      if (categoryId) {
+        where.categoryId = categoryId;
+      }
+
+      const issues = await prisma.issue.findMany({
+        where,
+        include: {
+          category: true,
+          user: {
+            select: {
+              id: true,
+              number: true,
+            },
+          },
+          comments: {
+            include: {
+              admin: {
+                select: {
+                  id: true,
+                  email: true,
+                },
+              },
+              user: {
+                select: {
+                  id: true,
+                  number: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
+          reposts: {
+            select: {
+              id: true,
+              userId: true,
+            },
+          },
+        },
+        orderBy: {
+          [sortBy]: order,
+        },
+      });
+
+      // Get max repost count for normalization
+      const maxReposts = await getMaxRepostCount(prisma);
+
+      // Calculate priority for each issue
+      const issuesWithPriority = issues.map((issue) => {
+        const repostCount = issue.reposts.length;
+        const priority = calculatePriority(issue.importanceRating, repostCount, maxReposts);
+        
+        return {
+          ...issue,
+          repostCount,
+          priority,
+        };
+      });
+
+      // Sort by priority if requested
+      if (sortBy === "priority") {
+        issuesWithPriority.sort((a, b) => {
+          return order === "desc"
+            ? b.priority.totalPriority - a.priority.totalPriority
+            : a.priority.totalPriority - b.priority.totalPriority;
+        });
+      }
+
+      return res.status(200).json({
+        message: "Your issues retrieved successfully",
+        issues: issuesWithPriority,
+        count: issuesWithPriority.length,
+      });
+    } catch (error) {
+      console.error("[Issue] getMyIssues failed:", error);
+      return res.status(500).json({ message: "Failed to retrieve your issues" });
+    }
+  };
+
   // Get a single issue by ID
   static getIssueById = async (req, res) => {
     try {
@@ -222,6 +302,12 @@ export class IssueController {
               createdAt: "asc",
             },
           },
+          reposts: {
+            select: {
+              id: true,
+              userId: true,
+            },
+          },
         },
       });
 
@@ -229,9 +315,18 @@ export class IssueController {
         return res.status(404).json({ message: "Issue not found" });
       }
 
+      // Calculate priority
+      const maxReposts = await getMaxRepostCount(prisma);
+      const repostCount = issue.reposts.length;
+      const priority = calculatePriority(issue.importanceRating, repostCount, maxReposts);
+
       return res.status(200).json({
         message: "Issue retrieved successfully",
-        issue,
+        issue: {
+          ...issue,
+          repostCount,
+          priority,
+        },
       });
     } catch (error) {
       console.error("[Issue] getIssueById failed:", error);

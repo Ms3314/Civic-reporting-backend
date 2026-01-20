@@ -1,16 +1,94 @@
-# Authentication & Authorization
+# Authentication
+
+This document explains the authentication system used in the Hack Backend.
 
 ## Overview
 
-The API uses JWT (JSON Web Tokens) with role-based access control. There are two roles:
-- **`user`**: Regular citizens who can report issues
-- **`admin`**: Administrators who can manage issues
+The application uses **JWT (JSON Web Tokens)** for authentication with two different flows:
 
-## User Authentication (SMS-based)
+1. **Users (Citizens)**: SMS OTP-based authentication via Twilio Verify
+2. **Admins**: Email/password-based authentication
 
-### 1. Request OTP
+## JWT Tokens
+
+### Token Structure
+
+All JWT tokens contain:
+
+```json
+{
+  "sub": "user-or-admin-id",
+  "role": "user" | "admin",
+  "iat": 1234567890,
+  "exp": 1234611090
+}
+```
+
+**User tokens** also include:
+```json
+{
+  "number": "+1234567890"
+}
+```
+
+**Admin tokens** also include:
+```json
+{
+  "email": "admin@example.com"
+}
+```
+
+### Using Tokens
+
+Include the token in the `Authorization` header:
+
 ```http
-POST /api/v1/user/auth/login/request-otp
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+### Token Expiration
+
+- Default: 12 hours
+- Configurable via `JWT_EXPIRES_IN` environment variable
+- Valid formats: `1h`, `12h`, `7d`, `30d`
+
+## User Authentication (SMS OTP)
+
+### Flow
+
+```
+┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
+│  User   │     │   API   │     │ Twilio  │     │   DB    │
+└────┬────┘     └────┬────┘     └────┬────┘     └────┬────┘
+     │               │               │               │
+     │ POST /request-otp             │               │
+     │──────────────>│               │               │
+     │               │ Send OTP      │               │
+     │               │──────────────>│               │
+     │               │    OK         │               │
+     │   OTP Sent    │<──────────────│               │
+     │<──────────────│               │               │
+     │               │               │               │
+     │ POST /verify-otp              │               │
+     │──────────────>│               │               │
+     │               │ Verify OTP    │               │
+     │               │──────────────>│               │
+     │               │   Approved    │               │
+     │               │<──────────────│               │
+     │               │               │  Find/Create  │
+     │               │               │     User      │
+     │               │──────────────────────────────>│
+     │               │               │     User      │
+     │   JWT Token   │<──────────────────────────────│
+     │<──────────────│               │               │
+     │               │               │               │
+```
+
+### Endpoints
+
+#### Request OTP
+```http
+POST /api/v1/user/request-otp
 Content-Type: application/json
 
 {
@@ -18,9 +96,17 @@ Content-Type: application/json
 }
 ```
 
-### 2. Verify OTP & Get Token
+**Response (200):**
+```json
+{
+  "message": "OTP sent successfully. Please check your phone.",
+  "sid": "VExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+}
+```
+
+#### Verify OTP
 ```http
-POST /api/v1/user/auth/login/verify-otp
+POST /api/v1/user/verify-otp
 Content-Type: application/json
 
 {
@@ -29,25 +115,54 @@ Content-Type: application/json
 }
 ```
 
-**Response:**
+**Response (200):**
 ```json
 {
   "success": true,
   "message": "Login successful. OTP verified.",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token": "eyJhbGciOiJIUzI1NiIs...",
   "user": {
-    "id": "user-uuid",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
     "number": "+1234567890",
     "role": "user"
   }
 }
 ```
 
-## Admin Authentication
+### Auto-Registration
 
-### Login
+New users are automatically registered when they verify OTP for the first time:
+- No separate signup endpoint
+- Phone number becomes unique identifier
+- User record created in database
+
+## Admin Authentication (Email/Password)
+
+### Flow
+
+```
+┌─────────┐     ┌─────────┐     ┌─────────┐
+│  Admin  │     │   API   │     │   DB    │
+└────┬────┘     └────┬────┘     └────┬────┘
+     │               │               │
+     │ POST /login   │               │
+     │──────────────>│               │
+     │               │  Find Admin   │
+     │               │──────────────>│
+     │               │    Admin      │
+     │               │<──────────────│
+     │               │               │
+     │               │ Verify Password
+     │               │               │
+     │   JWT Token   │               │
+     │<──────────────│               │
+     │               │               │
+```
+
+### Endpoint
+
 ```http
-POST /api/v1/admin/auth/login
+POST /api/v1/admin/login
 Content-Type: application/json
 
 {
@@ -56,97 +171,155 @@ Content-Type: application/json
 }
 ```
 
-**Response:**
+**Response (200):**
 ```json
 {
   "success": true,
   "message": "Admin logged in successfully",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token": "eyJhbGciOiJIUzI1NiIs...",
   "admin": {
-    "id": "admin-uuid",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
     "email": "admin@example.com",
     "role": "admin"
   }
 }
 ```
 
-## Using the Token
+### Default Admin Accounts
 
-Include the JWT token in the `Authorization` header:
-
-```http
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-Or without "Bearer" prefix:
-```http
-Authorization: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
+Seeded admin accounts (password: `random`):
+- `ghmc-disasterresponseforce(drf)@gmail.com`
+- `ghmc-health&sanitationdept.@gmail.com`
+- `ghmc-solidwastemanagement(swm)dept.@gmail.com`
+- ... and more (see `prisma/seed.js`)
 
 ## Protected Routes
 
-### User Routes (require `user` role)
-- `POST /api/v1/user/issues` - Create issue
-- `GET /api/v1/user/issues` - Get user's issues
-- `GET /api/v1/user/issues/:id` - Get specific issue
+### Middleware
 
-### Admin Routes (require `admin` role)
-- `GET /api/v1/admin/issues` - Get all issues
-- `GET /api/v1/admin/issues/:id` - Get specific issue
-- `PUT /api/v1/admin/issues/:id/status` - Update issue status
+The `authenticate` middleware validates JWT tokens:
 
-## Token Structure
+```javascript
+// middleware/auth.js
+import jwt from "jsonwebtoken";
 
-JWT tokens contain:
-- `sub`: User/Admin ID
-- `role`: Either `"user"` or `"admin"`
-- `number` (for users): Phone number
-- `email` (for admins): Email address
-- `exp`: Expiration time (default: 12 hours)
+export const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+  
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(401).json({ message: "Invalid or expired token" });
+  }
+};
+```
+
+### Role Checks
+
+Additional middleware for role-based access:
+
+```javascript
+export const requireUser = (req, res, next) => {
+  if (req.user.role !== "user") {
+    return res.status(403).json({ message: "User access required" });
+  }
+  next();
+};
+
+export const requireAdmin = (req, res, next) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+};
+```
+
+### Using in Routes
+
+```javascript
+// User-only route
+router.post("/issues", authenticate, requireUser, IssueController.createIssue);
+
+// Admin-only route
+router.put("/issues/:id/status", authenticate, requireAdmin, AdminController.updateIssueStatus);
+```
 
 ## Error Responses
 
 ### 401 Unauthorized
+
 ```json
 {
-  "message": "No token provided"
+  "message": "Authentication required"
+}
+```
+or
+```json
+{
+  "message": "Invalid or expired token"
 }
 ```
 
-### 401 Invalid Token
+### 403 Forbidden
+
 ```json
 {
-  "message": "Invalid token"
+  "message": "User access required"
+}
+```
+or
+```json
+{
+  "message": "Admin access required"
 }
 ```
 
-### 401 Token Expired
-```json
-{
-  "message": "Token expired"
-}
-```
+## Security Considerations
 
-### 403 Access Denied
-```json
-{
-  "message": "Access denied. Required role: admin"
-}
-```
+### Current Implementation
 
-## Middleware
+1. **JWT Signing**: Uses HS256 algorithm with secret key
+2. **Token Expiration**: Configurable, default 12 hours
+3. **Twilio Verify**: Handles OTP security (rate limiting, fraud detection)
+4. **Phone Validation**: E.164 format required
 
-The authentication middleware (`middleware/auth.js`) provides:
-- `authenticate`: Verifies JWT token and attaches user info to `req.user`
-- `requireRole(...roles)`: Checks if user has one of the required roles
-- `requireAdmin`: Convenience middleware for admin-only routes
-- `requireUser`: Convenience middleware for user-only routes
+### Production Recommendations
 
-## Security Notes
+1. **Password Hashing**: Hash admin passwords (currently plain text)
+   ```javascript
+   import bcrypt from "bcrypt";
+   const hashedPassword = await bcrypt.hash(password, 10);
+   ```
 
-- Tokens expire after 12 hours (configurable via `JWT_EXPIRES_IN`)
-- Users can only see and create their own issues
-- Admins can see and manage all issues
-- Always use HTTPS in production
-- Store tokens securely on the client side
+2. **HTTPS Only**: Always use HTTPS in production
 
+3. **Refresh Tokens**: Implement refresh token rotation
+
+4. **Rate Limiting**: Add rate limiting to auth endpoints
+   ```javascript
+   import rateLimit from "express-rate-limit";
+   const authLimiter = rateLimit({
+     windowMs: 15 * 60 * 1000, // 15 minutes
+     max: 5 // 5 attempts
+   });
+   ```
+
+5. **Token Blacklisting**: Implement logout with token blacklist
+
+6. **Secure Headers**: Add security headers
+   ```javascript
+   import helmet from "helmet";
+   app.use(helmet());
+   ```
+
+## Code Reference
+
+- **User Controller**: `controller/userController.js`
+- **Admin Controller**: `controller/adminController.js`
+- **Auth Middleware**: `middleware/auth.js`

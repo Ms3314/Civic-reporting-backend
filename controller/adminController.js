@@ -55,34 +55,12 @@ export class AdminController {
       const { id } = req.params;
       const { status } = req.body;
 
-      if (status === undefined) {
-        return res.status(400).json({ message: "Status is required" });
-      }
-
-      // Accept either numeric status (0-5) or string enum value (PENDING, PROGRESS, COMPLETED)
-      const mapNumericToEnum = (n) => {
-        if (n === 0) return "PENDING";
-        if (n === 5) return "COMPLETED";
-        return "PROGRESS"; // any intermediate value considered in-progress
-      };
-
-      let finalStatus;
-      if (typeof status === "number" || !Number.isNaN(parseInt(status))) {
-        const statusValue = parseInt(status);
-        if (statusValue < 0 || statusValue > 5) {
-          return res.status(400).json({
-            message: "Status must be between 0 and 5 (0=pending, 5=resolved)",
-          });
-        }
-        finalStatus = mapNumericToEnum(statusValue);
-      } else if (typeof status === "string") {
-        const up = status.toUpperCase();
-        if (!["PENDING", "PROGRESS", "COMPLETED"].includes(up)) {
-          return res.status(400).json({ message: "Invalid status value" });
-        }
-        finalStatus = up;
-      } else {
-        return res.status(400).json({ message: "Invalid status payload" });
+      // Validate status is a number between 0-5
+      const statusValue = parseInt(status);
+      if (isNaN(statusValue) || statusValue < 0 || statusValue > 5) {
+        return res.status(400).json({
+          message: "Status must be a number between 0 and 5 (0=pending, 5=resolved)",
+        });
       }
       
       const issue = await prisma.issue.findUnique({
@@ -95,7 +73,7 @@ export class AdminController {
 
       const updatedIssue = await prisma.issue.update({
         where: { id },
-        data: { status: finalStatus },
+        data: { status: statusValue },
         include: {
           category: true,
           user: {

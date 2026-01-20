@@ -365,8 +365,8 @@ paths:
     get:
       tags:
         - User Issues
-      summary: Get user's issues
-      description: Retrieve all issues created by the authenticated user
+      summary: Get all issues
+      description: Retrieve all issues (users can see all issues, not just their own)
       operationId: getUserIssues
       security:
         - bearerAuth: []
@@ -408,6 +408,65 @@ paths:
                 properties:
                   message:
                     type: string
+                  issues:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Issue'
+                  count:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '500':
+          description: Server error
+
+  /user/issues/my-issues:
+    get:
+      tags:
+        - User Issues
+      summary: Get my issues only
+      description: Retrieve only the issues created by the authenticated user
+      operationId: getMyIssues
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by status (0-5)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 5
+        - name: categoryId
+          in: query
+          description: Filter by category ID
+          schema:
+            type: string
+            format: uuid
+        - name: sortBy
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum: [createdAt, updatedAt, priority]
+            default: createdAt
+        - name: order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Your issues retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Your issues retrieved successfully"
                   issues:
                     type: array
                     items:
@@ -611,11 +670,60 @@ paths:
 
   # Comment Endpoints
   /user/issues/{issueId}/comments:
+    post:
+      tags:
+        - Comments
+      summary: Create a comment on an issue (User)
+      description: Add a comment to any issue (users can comment on any issue, not just their own)
+      operationId: createUserComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: issueId
+          in: path
+          required: true
+          description: Issue ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  example: "This is a serious issue that needs attention!"
+      responses:
+        '201':
+          description: Comment created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  comment:
+                    $ref: '#/components/schemas/Comment'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+        '404':
+          description: Issue or user not found
+        '500':
+          description: Server error
+
     get:
       tags:
         - Comments
       summary: Get comments for an issue (User)
-      description: Retrieve all comments for a specific issue
+      description: Retrieve all comments for a specific issue (users can view comments on any issue)
       operationId: getUserComments
       security:
         - bearerAuth: []
@@ -645,8 +753,6 @@ paths:
                     type: integer
         '401':
           description: Unauthorized
-        '403':
-          description: Forbidden - Can only view comments on own issues
         '404':
           description: Issue not found
         '500':
@@ -1113,8 +1219,11 @@ components:
         adminId:
           type: string
           format: uuid
+          nullable: true
+          description: Present if comment is from an admin
         admin:
           type: object
+          nullable: true
           properties:
             id:
               type: string
@@ -1122,6 +1231,20 @@ components:
             email:
               type: string
               format: email
+        userId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Present if comment is from a user
+        user:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            number:
+              type: string
         createdAt:
           type: string
           format: date-time

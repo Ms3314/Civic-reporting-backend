@@ -1,4 +1,0 @@
--- AlterTable
-ALTER TABLE "Issue" ADD COLUMN     "importanceRating" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "status" INTEGER NOT NULL DEFAULT 0,
-ALTER COLUMN "image" DROP NOT NULL;
